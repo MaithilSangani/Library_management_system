@@ -1,7 +1,8 @@
 'use client';
 
 import { useAuth } from '../contexts/AuthContext';
-import { redirect } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { LibrarianSidebar } from '../components/layout/LibrarianSidebar';
 
 interface LibrarianLayoutProps {
@@ -10,6 +11,13 @@ interface LibrarianLayoutProps {
 
 export default function LibrarianLayout({ children }: LibrarianLayoutProps) {
   const { user, isLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoading && (!user || (user.role !== 'LIBRARIAN' && user.role !== 'ADMIN'))) {
+      router.push('/login');
+    }
+  }, [user, isLoading, router]);
 
   if (isLoading) {
     return (
@@ -20,7 +28,11 @@ export default function LibrarianLayout({ children }: LibrarianLayoutProps) {
   }
 
   if (!user || (user.role !== 'LIBRARIAN' && user.role !== 'ADMIN')) {
-    redirect('/login');
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+      </div>
+    );
   }
 
   return (

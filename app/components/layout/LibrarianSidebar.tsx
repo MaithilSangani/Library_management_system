@@ -53,8 +53,8 @@ export function LibrarianSidebar() {
     return pathname === href || pathname.startsWith(href);
   };
 
-  const handleSignOut = async () => {
-    await logout();
+  const handleSignOut = () => {
+    logout();
     router.push('/login');
   };
 
