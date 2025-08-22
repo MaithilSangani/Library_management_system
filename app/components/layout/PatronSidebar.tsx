@@ -64,8 +64,8 @@ export function PatronSidebar() {
     return pathname === href || pathname.startsWith(href);
   };
 
-  const handleSignOut = () => {
-    logout();
+  const handleSignOut = async () => {
+    await logout();
     router.push('/login');
   };
 

@@ -17,7 +17,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
 }
 
@@ -124,10 +124,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('auth-user');
-    localStorage.removeItem('auth-token');
+  const logout = async () => {
+    try {
+      // Call the logout API to clear server-side session
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (error) {
+      console.error('Logout API error:', error);
+    } finally {
+      // Clear client-side state regardless of API call success
+      setUser(null);
+      localStorage.removeItem('auth-user');
+      localStorage.removeItem('auth-token');
+    }
   };
 
   const hasRole = (roles: UserRole | UserRole[]): boolean => {
