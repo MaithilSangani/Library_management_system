@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum ItemStatus {
+  AVAILABLE
+  BORROWED
+  RESERVED
+  OVERDUE
+  UNDER_MAINTENANCE
+  DAMAGED
+  LOST
+  OUT_OF_STOCK
+}
+
+enum ItemCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+  UNUSABLE
+}
+
+model admin {
+  adminId               Int               @id @default(autoincrement())
+  adminEmail            String            @unique(map: "Admin_adminEmail_key")
+  adminPassword         String
+  adminFirstName        String
+  adminLastName         String
+  adminOriginalPassword String?
+  librarysettings       librarysettings[]
+}
+
+model faculty {
+  facultyId           Int     @id @default(autoincrement())
+  facultyDepartment   String?
+  facultyProfileImage String?
+  patronId            Int     @unique(map: "Faculty_patronId_key")
+  patron              patron  @relation(fields: [patronId], references: [patronId], map: "Faculty_patronId_fkey")
+}
+
+model item {
+  itemId           Int           @id @default(autoincrement())
+  title            String
+  author           String
+  isbn             String?       @unique(map: "Item_isbn_key")
+  subject          String?
+  keywords         String?
+  itemType         String
+  price            Float
+  imageUrl         String?
+  totalCopies      Int           @default(1)
+  availableCopies  Int           @default(1)
+  condition        ItemCondition @default(EXCELLENT)
+  maintenanceNotes String?
+  isVisible        Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  reservation      reservation[]
+  transaction      transaction[]
+  statusHistory    ItemStatusHistory[]
+}
+
+model librarian {
+  librarianId               Int     @id @default(autoincrement())
+  librarianEmail            String  @unique(map: "Librarian_librarianEmail_key")
+  librarianPassword         String
+  librarianFirstName        String
+  librarianLastName         String
+  librarianOriginalPassword String?
+}
+
+model librarysettings {
+  librarySettingsId Int      @id @default(1)
+  borrowingLimit    Int      @default(5)
+  loanPeriodDays    Int      @default(14)
+  finePerDay        Float    @default(1)
+  updatedAt         DateTime      @updatedAt
+  updatedByAdminId  Int?
+  admin             admin?   @relation(fields: [updatedByAdminId], references: [adminId], map: "LibrarySettings_updatedByAdminId_fkey")
+
+  @@index([updatedByAdminId], map: "LibrarySettings_updatedByAdminId_fkey")
+}
+
+model patron {
+  patronId               Int           @id @default(autoincrement())
+  patronEmail            String        @unique(map: "Patron_patronEmail_key")
+  patronPassword         String
+  patronFirstName        String
+  patronLastName         String
+  isStudent              Boolean       @default(false)
+  isFaculty              Boolean       @default(false)
+  patronCreatedAt        DateTime      @default(now())
+  patronUpdatedAt        DateTime      @updatedAt
+  patronOriginalPassword String?
+  faculty                faculty?
+  reservation            reservation[]
+  student                student?
+  transaction            transaction[]
+}
+
+model reservation {
+  reservationId Int      @id @default(autoincrement())
+  reservedAt    DateTime @default(now())
+  itemId        Int
+  patronId      Int
+  item          item     @relation(fields: [itemId], references: [itemId], map: "Reservation_itemId_fkey")
+  patron        patron   @relation(fields: [patronId], references: [patronId], map: "Reservation_patronId_fkey")
+
+  @@unique([itemId, patronId], map: "Reservation_itemId_patronId_key")
+  @@index([patronId], map: "Reservation_patronId_fkey")
+}
+
+model student {
+  studentId               Int     @id @default(autoincrement())
+  studentDepartment       String?
+  studentSemester         Int?
+  studentRollNo           Int?
+  studentEnrollmentNumber Int?    @unique(map: "Student_studentEnrollmentNumber_key")
+  studentProfileImage     String?
+  patronId                Int     @unique(map: "Student_patronId_key")
+  patron                  patron  @relation(fields: [patronId], references: [patronId], map: "Student_patronId_fkey")
+}
+
+model transaction {
+  transactionId Int       @id @default(autoincrement())
+  borrowedAt    DateTime  @default(now())
+  returnedAt    DateTime?
+  dueDate       DateTime
+  isReturned    Boolean   @default(false)
+  finePaid      Float?
+  itemId        Int
+  patronId      Int
+  item          item      @relation(fields: [itemId], references: [itemId], map: "Transaction_itemId_fkey")
+  patron        patron    @relation(fields: [patronId], references: [patronId], map: "Transaction_patronId_fkey")
+
+  @@index([itemId], map: "Transaction_itemId_fkey")
+  @@index([patronId], map: "Transaction_patronId_fkey")
+}
+
+model ItemStatusHistory {
+  historyId     Int        @id @default(autoincrement())
+  status        ItemStatus
+  previousStatus ItemStatus?
+  reason        String?
+  changedBy     String     // Could be system, admin, librarian, or patron email/id
+  changedAt     DateTime   @default(now())
+  notes         String?
+  itemId        Int
+  item          item       @relation(fields: [itemId], references: [itemId])
+}
