@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/app/lib/utils';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
+import { useAuth } from '@/app/contexts/AuthContext';
 import { 
   LayoutDashboard, 
   Users, 
@@ -45,9 +46,16 @@ const adminNavItems = [
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuth();
 
   const isActive = (href: string) => {
     return pathname === href || pathname.startsWith(href);
+  };
+
+  const handleSignOut = () => {
+    logout();
+    router.push('/login');
   };
 
   return (
@@ -98,6 +106,7 @@ export function AdminSidebar() {
             variant="outline"
             size="sm"
             className="w-full justify-start"
+            onClick={handleSignOut}
           >
             <LogOut className="mr-2 h-4 w-4" />
             Sign Out
