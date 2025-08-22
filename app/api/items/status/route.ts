@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const items = await prisma.item.findMany({
       where: { isVisible: true },
       include: {
-        transactions: {
+        transaction: {
           select: {
             transactionId: true,
             isReturned: true,
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
             returnedAt: true,
           }
         },
-        reservations: {
+        reservation: {
           select: {
             reservationId: true,
             reservedAt: true,
@@ -138,7 +138,7 @@ export async function PATCH(request: NextRequest) {
     const currentItem = await prisma.item.findUnique({
       where: { itemId: parseInt(itemId) },
       include: {
-        transactions: {
+        transaction: {
           select: {
             transactionId: true,
             isReturned: true,
@@ -147,7 +147,7 @@ export async function PATCH(request: NextRequest) {
             returnedAt: true,
           }
         },
-        reservations: {
+        reservation: {
           select: {
             reservationId: true,
             reservedAt: true,
@@ -179,7 +179,7 @@ export async function PATCH(request: NextRequest) {
       where: { itemId: parseInt(itemId) },
       data: updateData,
       include: {
-        transactions: {
+        transaction: {
           select: {
             transactionId: true,
             isReturned: true,
@@ -188,7 +188,7 @@ export async function PATCH(request: NextRequest) {
             returnedAt: true,
           }
         },
-        reservations: {
+        reservation: {
           select: {
             reservationId: true,
             reservedAt: true,
