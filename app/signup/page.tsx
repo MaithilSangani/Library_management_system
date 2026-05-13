@@ -14,6 +14,21 @@ export default function Signup() {
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const [firstName, setFirstName] = useState<string>("");
+  const [lastName, setLastName] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [userType, setUserType] = useState<string>("PATRON");
+  const [accountType, setAccountType] = useState<string>("general");
+  const [studentDetails, setStudentDetails] = useState({
+    department: '',
+    semester: 1,
+    rollNo: '',
+    enrollmentNumber: ''
+  });
+  const [facultyDetails, setFacultyDetails] = useState({
+    department: ''
+  });
   const router = useRouter();
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -22,26 +37,58 @@ export default function Signup() {
     setSuccess("");
     setIsLoading(true);
     
-    const formData = new FormData(event.currentTarget);
-    const firstName = formData.get("firstName") as string;
-    const lastName = formData.get("lastName") as string;
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-    const userType = formData.get("userType") as string || "PATRON";
+    if (!firstName || !lastName || !email || !password) {
+      setError("Please fill in all fields.");
+      setIsLoading(false);
+      return;
+    }
+
+    // Additional validation for patron accounts
+    if (userType === 'PATRON') {
+      if (accountType === 'student' && !studentDetails.department) {
+        setError("Department is required for student accounts.");
+        setIsLoading(false);
+        return;
+      }
+      if (accountType === 'faculty' && !facultyDetails.department) {
+        setError("Department is required for faculty accounts.");
+        setIsLoading(false);
+        return;
+      }
+    }
     
     try {
+      const requestBody: any = {
+        firstName,
+        lastName,
+        email,
+        password,
+        userType,
+      };
+
+      // Add patron-specific fields
+      if (userType === 'PATRON') {
+        requestBody.accountType = accountType;
+        if (accountType === 'student') {
+          requestBody.studentDetails = {
+            department: studentDetails.department,
+            semester: parseInt(studentDetails.semester.toString()) || null,
+            rollNo: studentDetails.rollNo ? parseInt(studentDetails.rollNo) : null,
+            enrollmentNumber: studentDetails.enrollmentNumber ? parseInt(studentDetails.enrollmentNumber) : null,
+          };
+        } else if (accountType === 'faculty') {
+          requestBody.facultyDetails = {
+            department: facultyDetails.department,
+          };
+        }
+      }
+
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          firstName,
-          lastName,
-          email,
-          password,
-          userType,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -105,8 +152,8 @@ export default function Signup() {
         </div>
 
         {/* Signup Form */}
-        <div className="w-full max-w-md mx-auto">
-          <Card className="shadow-elegant border-0 bg-card/95 backdrop-blur">
+        <div className="w-full max-w-lg mx-auto">
+          <Card className="shadow-elegant border-0 bg-card/95 backdrop-blur max-h-[85vh] overflow-y-auto">
             <CardHeader className="text-center space-y-2">
               <CardTitle className="text-2xl font-semibold">Create Account</CardTitle>
               <CardDescription>
@@ -136,6 +183,8 @@ export default function Signup() {
                       name="firstName"
                       type="text" 
                       placeholder="Enter first name"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
                       required 
                     />
                   </div>
@@ -146,6 +195,8 @@ export default function Signup() {
                       name="lastName"
                       type="text" 
                       placeholder="Enter last name"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
                       required 
                     />
                   </div>
@@ -157,6 +208,8 @@ export default function Signup() {
                     name="email"
                     type="email" 
                     placeholder="Enter your email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required 
                   />
                 </div>
@@ -167,22 +220,114 @@ export default function Signup() {
                     name="password"
                     type="password" 
                     placeholder="Create a strong password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     required 
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="userType">Account Type</Label>
+                  <Label htmlFor="userType">Primary Account Type</Label>
                   <select 
                     id="userType" 
                     name="userType"
                     className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm"
-                    defaultValue="PATRON"
+                    value={userType}
+                    onChange={(e) => setUserType(e.target.value)}
                   >
                     <option value="ADMIN">Admin</option>
                     <option value="LIBRARIAN">Librarian</option>
-                    <option value="PATRON">User/Student</option>
+                    <option value="PATRON">Patron</option>
                   </select>
                 </div>
+
+                {/* Patron Account Type Selection */}
+                {userType === 'PATRON' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="accountType">Patron Type</Label>
+                    <select 
+                      id="accountType" 
+                      name="accountType"
+                      className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm"
+                      value={accountType}
+                      onChange={(e) => setAccountType(e.target.value)}
+                    >
+                      <option value="general">General Patron</option>
+                      <option value="student">Student</option>
+                      <option value="faculty">Faculty</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Student Details */}
+                {userType === 'PATRON' && accountType === 'student' && (
+                  <div className="space-y-4 border-t pt-4">
+                    <Label className="text-base font-medium text-blue-700">Student Details</Label>
+                    <div className="space-y-2">
+                      <Label htmlFor="studentDepartment">Department *</Label>
+                      <Input 
+                        id="studentDepartment" 
+                        type="text" 
+                        placeholder="e.g., Computer Science"
+                        value={studentDetails.department}
+                        onChange={(e) => setStudentDetails({...studentDetails, department: e.target.value})}
+                        required 
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="semester">Semester</Label>
+                        <select 
+                          id="semester"
+                          className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm"
+                          value={studentDetails.semester}
+                          onChange={(e) => setStudentDetails({...studentDetails, semester: parseInt(e.target.value)})}
+                        >
+                          {[1,2,3,4,5,6,7,8].map(sem => (
+                            <option key={sem} value={sem}>{sem}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="rollNo">Roll Number</Label>
+                        <Input 
+                          id="rollNo" 
+                          type="number" 
+                          placeholder="e.g., 101"
+                          value={studentDetails.rollNo}
+                          onChange={(e) => setStudentDetails({...studentDetails, rollNo: e.target.value})}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="enrollmentNumber">Enrollment Number</Label>
+                      <Input 
+                        id="enrollmentNumber" 
+                        type="number" 
+                        placeholder="e.g., 2024001"
+                        value={studentDetails.enrollmentNumber}
+                        onChange={(e) => setStudentDetails({...studentDetails, enrollmentNumber: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Faculty Details */}
+                {userType === 'PATRON' && accountType === 'faculty' && (
+                  <div className="space-y-4 border-t pt-4">
+                    <Label className="text-base font-medium text-indigo-700">Faculty Details</Label>
+                    <div className="space-y-2">
+                      <Label htmlFor="facultyDepartment">Department *</Label>
+                      <Input 
+                        id="facultyDepartment" 
+                        type="text" 
+                        placeholder="e.g., Computer Science"
+                        value={facultyDetails.department}
+                        onChange={(e) => setFacultyDetails({...facultyDetails, department: e.target.value})}
+                        required 
+                      />
+                    </div>
+                  </div>
+                )}
                 <Button 
                   type="submit" 
                   className="w-full bg-gradient-primary text-white hover:opacity-90 transition-opacity"

@@ -59,11 +59,11 @@ export async function PUT(
     const body = await request.json();
     
     // Validate required fields
-    const { title, author, itemType, price, totalCopies } = body;
+    const { title, author, itemType, price, totalCopies, condition } = body;
     
-    if (!title || !author || !itemType || price === undefined || totalCopies === undefined) {
+    if (!title || !author || !itemType || price === undefined || totalCopies === undefined || !condition) {
       return NextResponse.json(
-        { error: 'Missing required fields: title, author, itemType, price, totalCopies' },
+        { error: 'Missing required fields: title, author, itemType, price, totalCopies, condition' },
         { status: 400 }
       );
     }
@@ -98,6 +98,8 @@ export async function PUT(
         imageUrl: body.imageUrl?.trim() || null,
         totalCopies: parseInt(totalCopies),
         availableCopies: newAvailableCopies,
+        condition: condition.trim(),
+        maintenanceNotes: body.maintenanceNotes?.trim() || null,
       },
     });
 
@@ -137,14 +139,18 @@ export async function DELETE(
       );
     }
 
+    // Get force parameter from request URL
+    const url = new URL(request.url);
+    const force = url.searchParams.get('force') === 'true';
+
     // Check if item exists
     const existingItem = await prisma.item.findUnique({
       where: { itemId, isVisible: true },
       include: {
-        transactions: {
+        transaction: {
           where: { isReturned: false }
         },
-        reservations: true
+        reservation: true
       }
     });
 
@@ -155,19 +161,43 @@ export async function DELETE(
       );
     }
 
-    // Check if item has active transactions or reservations
-    if (existingItem.transactions.length > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete item with active borrowings. Please ensure all copies are returned first.' },
-        { status: 400 }
-      );
-    }
+    // If not forcing, check for active dependencies
+    if (!force) {
+      // Check if item has active transactions or reservations
+      if (existingItem.transaction.length > 0) {
+        return NextResponse.json(
+          { error: 'Cannot delete item with active borrowings. Please ensure all copies are returned first.' },
+          { status: 400 }
+        );
+      }
 
-    if (existingItem.reservations.length > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete item with active reservations. Please cancel all reservations first.' },
-        { status: 400 }
-      );
+      if (existingItem.reservation.length > 0) {
+        return NextResponse.json(
+          { error: 'Cannot delete item with active reservations. Please cancel all reservations first.' },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Force delete - clean up dependencies first
+      console.log(`Force deleting item ${itemId} with ${existingItem.transaction.length} active transactions and ${existingItem.reservation.length} active reservations`);
+      
+      // Cancel all reservations for this item
+      if (existingItem.reservation.length > 0) {
+        await prisma.reservation.deleteMany({
+          where: { itemId }
+        });
+      }
+      
+      // Mark all unreturned transactions as returned (force return)
+      if (existingItem.transaction.length > 0) {
+        await prisma.transaction.updateMany({
+          where: { itemId, isReturned: false },
+          data: { 
+            isReturned: true, 
+            returnedAt: new Date()
+          }
+        });
+      }
     }
 
     // Soft delete by setting isVisible to false
@@ -177,7 +207,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({ 
-      message: 'Item deleted successfully',
+      message: force ? 'Item force deleted successfully' : 'Item deleted successfully',
       item: deletedItem
     });
   } catch (error) {

@@ -13,6 +13,7 @@ import { Textarea } from '@/app/components/ui/textarea';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/app/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Search, BookOpen, ChevronLeft, ChevronRight, Loader2, ImageIcon, Grid, List } from 'lucide-react';
+import { getBookCoverImage, generatePlaceholderCover } from '@/app/lib/bookImages';
 
 interface Item {
   itemId: number;
@@ -26,6 +27,9 @@ interface Item {
   imageUrl?: string;
   totalCopies: number;
   availableCopies: number;
+  condition: string;
+  maintenanceNotes?: string;
+  isVisible: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,6 +44,8 @@ interface ItemFormData {
   price: number;
   imageUrl?: string;
   totalCopies: number;
+  condition: string;
+  maintenanceNotes?: string;
 }
 
 interface ApiResponse {
@@ -58,17 +64,28 @@ interface ApiResponse {
   };
 }
 
+interface LibraryStats {
+  totalItems: number;
+  totalCopies: number;
+  availableCopies: number;
+  outOfStockItems: number;
+  borrowedCopies: number;
+}
+
 export default function Cataloging() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [selectedItemType, setSelectedItemType] = useState<string>('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pagination, setPagination] = useState<ApiResponse['pagination']>({ 
-    page: 1, limit: 10, totalCount: 0, totalPages: 0, hasNext: false, hasPrev: false 
-  });
   const [filters, setFilters] = useState<ApiResponse['filters']>({ subjects: [], itemTypes: [] });
+  const [stats, setStats] = useState<LibraryStats>({
+    totalItems: 0,
+    totalCopies: 0,
+    availableCopies: 0,
+    outOfStockItems: 0,
+    borrowedCopies: 0
+  });
   
   // Modal states
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
@@ -88,37 +105,30 @@ export default function Cataloging() {
     itemType: '',
     price: 0,
     imageUrl: '',
-    totalCopies: 1
+    totalCopies: 1,
+    condition: 'EXCELLENT',
+    maintenanceNotes: ''
   });
 
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (currentPage !== 1) {
-        setCurrentPage(1);
-      } else {
-        fetchItems();
-      }
+      fetchItems();
     }, 500);
     return () => clearTimeout(timer);
   }, [searchTerm, selectedSubject, selectedItemType]);
 
-  // Fetch when page changes
-  useEffect(() => {
-    fetchItems();
-  }, [currentPage]);
-
   // Initial load
   useEffect(() => {
     fetchItems();
+    fetchStats();
   }, []);
 
   const fetchItems = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: '10',
+        limit: '10000', // Very high limit to get all items
         ...(searchTerm && { search: searchTerm }),
         ...(selectedItemType !== 'all' && { itemType: selectedItemType }),
         ...(selectedSubject !== 'all' && { subject: selectedSubject })
@@ -131,13 +141,27 @@ export default function Cataloging() {
       
       const data: ApiResponse = await response.json();
       setItems(data.items);
-      setPagination(data.pagination);
       setFilters(data.filters);
     } catch (error) {
       console.error('Error fetching items:', error);
       toast.error('Failed to fetch items');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('/api/items/stats');
+      if (!response.ok) {
+        throw new Error('Failed to fetch statistics');
+      }
+      
+      const statsData: LibraryStats = await response.json();
+      setStats(statsData);
+    } catch (error) {
+      console.error('Error fetching statistics:', error);
+      // Don't show error toast for stats as it's not critical
     }
   };
 
@@ -165,6 +189,7 @@ export default function Cataloging() {
       toast.success(`Item ${editingItem ? 'updated' : 'created'} successfully`);
       resetForm();
       fetchItems();
+      fetchStats(); // Refresh statistics after item operation
     } catch (error) {
       console.error('Error submitting form:', error);
       toast.error(error instanceof Error ? error.message : 'An error occurred');
@@ -173,24 +198,44 @@ export default function Cataloging() {
     }
   };
 
-  const handleDelete = async (itemId: number) => {
+  const handleDelete = async (itemId: number, force: boolean = false) => {
     try {
-      const response = await fetch(`/api/items/${itemId}`, {
+      const url = force ? `/api/items/${itemId}?force=true` : `/api/items/${itemId}`;
+      const response = await fetch(url, {
         method: 'DELETE',
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete item');
+        const errorData = await response.json();
+        // Handle specific error messages from the API
+        if (response.status === 400 && !force) {
+          // This is a business logic error (active borrowings, reservations, etc.)
+          // Show confirmation dialog for force delete
+          const confirmForceDelete = window.confirm(
+            `${errorData.error}\n\nWould you like to force delete this item? This will:\n• Cancel all reservations\n• Mark all unreturned items as returned\n• Delete the item from catalog\n\nThis action cannot be undone.`
+          );
+          
+          if (confirmForceDelete) {
+            // Retry with force=true
+            return handleDelete(itemId, true);
+          } else {
+            toast.error(errorData.error);
+            return;
+          }
+        }
+        // For other errors, throw to be caught by the catch block
+        throw new Error(errorData.error || 'Failed to delete item');
       }
       
-      toast.success('Item deleted successfully');
+      const result = await response.json();
+      toast.success(result.message || 'Item deleted successfully');
       fetchItems();
+      fetchStats(); // Refresh statistics after deletion
     } catch (error) {
       console.error('Error deleting item:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to delete item');
+      // This will handle network errors or other unexpected errors
+      toast.error('An unexpected error occurred while deleting the item');
     }
-    setDeleteItemId(null);
   };
 
   const handleEdit = (item: Item) => {
@@ -204,7 +249,9 @@ export default function Cataloging() {
       itemType: item.itemType,
       price: item.price,
       imageUrl: item.imageUrl || '',
-      totalCopies: item.totalCopies
+      totalCopies: item.totalCopies,
+      condition: item.condition || 'EXCELLENT',
+      maintenanceNotes: item.maintenanceNotes || ''
     });
     setIsEditItemOpen(true);
   };
@@ -219,7 +266,9 @@ export default function Cataloging() {
       itemType: '',
       price: 0,
       imageUrl: '',
-      totalCopies: 1
+      totalCopies: 1,
+      condition: 'EXCELLENT',
+      maintenanceNotes: ''
     });
     setEditingItem(null);
     setIsAddItemOpen(false);
@@ -241,55 +290,15 @@ export default function Cataloging() {
     }
   };
 
-  // Function to get book cover image based on title
-  const getBookCoverImage = (title: string, isbn?: string) => {
-    // First try to use ISBN if available for more accurate results
-    if (isbn && isbn.trim()) {
-      return `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`;
-    }
-    
-    // Fallback to title-based search using Google Books API
-    const encodedTitle = encodeURIComponent(title.trim());
-    return `https://books.google.com/books/publisher/content/images/frontcover/${encodedTitle}?fife=w400-h600&source=gbs_api`;
-  };
-
-  // Alternative function using Open Library title search
-  const getOpenLibraryImage = (title: string) => {
-    // Clean the title for better search results
-    const cleanTitle = title.trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '+');
-    return `https://covers.openlibrary.org/b/title/${cleanTitle}-M.jpg`;
-  };
-
-  // Function to generate a placeholder book cover with the title
-  const generatePlaceholderCover = (title: string, author: string) => {
-    // This creates a data URL for a simple SVG book cover
-    const maxTitleLength = 25;
-    const displayTitle = title.length > maxTitleLength ? title.substring(0, maxTitleLength) + '...' : title;
-    const maxAuthorLength = 20;
-    const displayAuthor = author.length > maxAuthorLength ? author.substring(0, maxAuthorLength) + '...' : author;
-    
-    const svg = `
-      <svg width="200" height="300" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
-          </linearGradient>
-        </defs>
-        <rect width="200" height="300" fill="url(#grad1)" rx="8"/>
-        <rect x="10" y="10" width="180" height="280" fill="none" stroke="white" stroke-width="2" rx="4"/>
-        <text x="100" y="120" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">
-          <tspan x="100" dy="0">${displayTitle.split(' ').slice(0, 3).join(' ')}</tspan>
-          <tspan x="100" dy="20">${displayTitle.split(' ').slice(3).join(' ')}</tspan>
-        </text>
-        <text x="100" y="200" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle" opacity="0.8">
-          ${displayAuthor}
-        </text>
-        <rect x="15" y="250" width="170" height="2" fill="white" opacity="0.3"/>
-      </svg>
-    `;
-    
-    return `data:image/svg+xml;base64,${btoa(svg)}`;
+  // Get book cover image URLs with fallbacks
+  const getBookCoverUrls = (title: string, author: string, isbn?: string) => {
+    return getBookCoverImage({
+      title,
+      author,
+      isbn,
+      width: 400,
+      height: 600
+    });
   };
 
   // Form component for both add and edit
@@ -335,15 +344,11 @@ export default function Cataloging() {
               <SelectValue placeholder="Select item type" />
             </SelectTrigger>
             <SelectContent>
-              {filters.itemTypes.map((type) => (
+              {Array.from(new Set([...filters.itemTypes, 'Book', 'DVD', 'Magazine', 'Reference Book'])).map((type) => (
                 <SelectItem key={type} value={type}>
                   {type}
                 </SelectItem>
               ))}
-              <SelectItem value="Book">Book</SelectItem>
-              <SelectItem value="DVD">DVD</SelectItem>
-              <SelectItem value="Magazine">Magazine</SelectItem>
-              <SelectItem value="Reference Book">Reference Book</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -395,13 +400,45 @@ export default function Cataloging() {
         </div>
       </div>
       
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="condition">Item Condition *</Label>
+          <Select
+            value={formData.condition}
+            onValueChange={(value) => setFormData({ ...formData, condition: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select condition" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="EXCELLENT">Excellent</SelectItem>
+              <SelectItem value="GOOD">Good</SelectItem>
+              <SelectItem value="FAIR">Fair</SelectItem>
+              <SelectItem value="POOR">Poor</SelectItem>
+              <SelectItem value="DAMAGED">Damaged</SelectItem>
+              <SelectItem value="UNUSABLE">Unusable</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="keywords">Keywords</Label>
+          <Input
+            id="keywords"
+            value={formData.keywords}
+            onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
+            placeholder="Comma-separated keywords"
+          />
+        </div>
+      </div>
+      
       <div className="space-y-2">
-        <Label htmlFor="keywords">Keywords</Label>
-        <Input
-          id="keywords"
-          value={formData.keywords}
-          onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
-          placeholder="Comma-separated keywords"
+        <Label htmlFor="maintenanceNotes">Maintenance Notes</Label>
+        <Textarea
+          id="maintenanceNotes"
+          value={formData.maintenanceNotes}
+          onChange={(e) => setFormData({ ...formData, maintenanceNotes: e.target.value })}
+          placeholder="Optional notes about item condition or maintenance requirements..."
+          rows={3}
         />
       </div>
       
@@ -424,7 +461,7 @@ export default function Cataloging() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Item Cataloging</h1>
           <p className="text-muted-foreground">
-            Manage your library's collection - {pagination.totalCount} items total
+            Manage your library's collection - {items.length} items displayed
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -468,7 +505,56 @@ export default function Cataloging() {
         </div>
       </div>
 
-      {/* Items Table */}
+      {/* Collection Stats */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalItems}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Available</CardTitle>
+            <BookOpen className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {stats.availableCopies}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
+            <BookOpen className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {stats.outOfStockItems}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Copies</CardTitle>
+            <BookOpen className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">
+              {stats.totalCopies}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Library Collection */}
       <Card>
         <CardHeader>
           <CardTitle>Library Collection</CardTitle>
@@ -495,7 +581,7 @@ export default function Cataloging() {
               <SelectContent>
                 <SelectItem value="all">All Subjects</SelectItem>
                 {filters.subjects.map((subject) => (
-                  <SelectItem key={subject} value={subject}>
+                  <SelectItem key={`subject-${subject}`} value={subject}>
                     {subject}
                   </SelectItem>
                 ))}
@@ -508,7 +594,7 @@ export default function Cataloging() {
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
                 {filters.itemTypes.map((type) => (
-                  <SelectItem key={type} value={type}>
+                  <SelectItem key={`filter-${type}`} value={type}>
                     {type}
                   </SelectItem>
                 ))}
@@ -534,25 +620,27 @@ export default function Cataloging() {
                   <Card key={item.itemId} className={`group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border-0 shadow-md bg-white overflow-hidden ${isOutOfStock ? 'opacity-75' : ''}`}>
                     <div className="relative">
                       {/* Item Image */}
-                      <div className="aspect-[3/4] relative bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+                      <div className="aspect-[3/4] relative bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden flex items-center justify-center p-2">
                         <img
-                          src={item.imageUrl || getBookCoverImage(item.title, item.isbn)}
+                          src={item.imageUrl || getBookCoverUrls(item.title, item.author, item.isbn)[0]}
                           alt={item.title}
-                          className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${isOutOfStock ? 'grayscale' : ''}`}
+                          className={`max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105 rounded shadow-sm ${isOutOfStock ? 'grayscale' : ''}`}
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
-                            // Try Open Library as fallback
-                            if (!target.dataset.fallback1) {
-                              target.dataset.fallback1 = 'true';
-                              target.src = getOpenLibraryImage(item.title);
+                            const fallbacks = getBookCoverUrls(item.title, item.author, item.isbn);
+                            
+                            // Try next fallback
+                            if (!target.dataset.fallbackIndex) {
+                              target.dataset.fallbackIndex = '1';
+                            }
+                            
+                            const currentIndex = parseInt(target.dataset.fallbackIndex);
+                            if (currentIndex < fallbacks.length) {
+                              target.dataset.fallbackIndex = (currentIndex + 1).toString();
+                              target.src = fallbacks[currentIndex];
                               return;
                             }
-                            // Try generated placeholder as final fallback
-                            if (!target.dataset.fallback2) {
-                              target.dataset.fallback2 = 'true';
-                              target.src = generatePlaceholderCover(item.title, item.author);
-                              return;
-                            }
+                            
                             // If all fail, hide image and show icon
                             target.style.display = 'none';
                             const iconElement = target.nextElementSibling as HTMLElement;
@@ -817,34 +905,11 @@ export default function Cataloging() {
             </>
           )}
           
-          {/* Pagination - shared by both views */}
-          {!loading && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
+          {/* Total items display */}
+          {!loading && items.length > 0 && (
+            <div className="flex items-center justify-center mt-4">
               <div className="text-sm text-muted-foreground">
-                Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.totalCount)} of {pagination.totalCount} items
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(pagination.page - 1)}
-                  disabled={!pagination.hasPrev || loading}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                <span className="text-sm">
-                  Page {pagination.page} of {pagination.totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(pagination.page + 1)}
-                  disabled={!pagination.hasNext || loading}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                Displaying all {items.length} items
               </div>
             </div>
           )}
@@ -857,55 +922,6 @@ export default function Cataloging() {
           )}
         </CardContent>
       </Card>
-
-      {/* Collection Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{pagination.totalCount}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Available</CardTitle>
-            <BookOpen className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {items.filter(item => item.availableCopies > 0).length}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
-            <BookOpen className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {items.filter(item => item.availableCopies === 0).length}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Copies</CardTitle>
-            <BookOpen className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {items.reduce((total, item) => total + item.totalCopies, 0)}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Edit Item Dialog */}
       <Dialog open={isEditItemOpen} onOpenChange={setIsEditItemOpen}>

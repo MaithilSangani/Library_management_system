@@ -1,4 +1,16 @@
-import { ItemStatus, ItemCondition } from '@/app/generated/prisma';
+import { ItemCondition } from '@prisma/client';
+
+// Define ItemStatus enum since it's not available in the current schema
+export enum ItemStatus {
+  AVAILABLE = 'AVAILABLE',
+  BORROWED = 'BORROWED',
+  RESERVED = 'RESERVED',
+  OVERDUE = 'OVERDUE',
+  UNDER_MAINTENANCE = 'UNDER_MAINTENANCE',
+  DAMAGED = 'DAMAGED',
+  LOST = 'LOST',
+  OUT_OF_STOCK = 'OUT_OF_STOCK'
+}
 
 // Type definitions for item data with relations
 export interface ItemWithRelations {

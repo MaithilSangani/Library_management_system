@@ -6,11 +6,15 @@ import { ClientProviders } from './components/providers/ClientProviders';
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+  display: 'swap',
+  fallback: ['system-ui', 'arial'],
 });
 
 const playfairDisplay = Playfair_Display({
   subsets: ["latin"],
   variable: "--font-serif",
+  display: 'swap',
+  fallback: ['serif'],
 });
 
 export const metadata: Metadata = {

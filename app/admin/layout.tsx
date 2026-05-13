@@ -3,7 +3,7 @@
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { AdminSidebar } from '../components/layout/AdminSidebar';
+import { SimpleAdminSidebar } from '../components/layout/SimpleAdminSidebar';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -36,8 +36,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <AdminSidebar />
+    <div className="flex h-screen bg-gray-50">
+      <SimpleAdminSidebar />
       <main className="flex-1 overflow-y-auto p-6">
         {children}
       </main>

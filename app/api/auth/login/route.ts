@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@/app/generated/prisma';
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
@@ -61,11 +61,18 @@ export async function POST(request: NextRequest) {
 
     // Generate JWT token
     const jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
+    let userId: number;
+    if (userType === 'PATRON') {
+      userId = (user as any).patronId;
+    } else if (userType === 'ADMIN') {
+      userId = (user as any).adminId;
+    } else {
+      userId = (user as any).librarianId;
+    }
+    
     const token = jwt.sign(
       {
-        userId: userType === 'PATRON' ? user.patronId : 
-                userType === 'ADMIN' ? user.adminId : 
-                user.librarianId,
+        userId: userId,
         email: email,
         userType: userType,
       },

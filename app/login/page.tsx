@@ -14,6 +14,8 @@ import { useAuth } from "@/app/contexts/AuthContext";
 export default function Login() {
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
   const router = useRouter();
   const { login, isLoading } = useAuth();
 
@@ -22,9 +24,10 @@ export default function Login() {
     setError("");
     setSuccess("");
     
-    const formData = new FormData(event.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
+    if (!email || !password) {
+      setError("Please fill in all fields.");
+      return;
+    }
     
     try {
       const success = await login(email, password);
@@ -130,6 +133,8 @@ export default function Login() {
                     name="email"
                     type="email" 
                     placeholder="Enter your email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required 
                   />
                 </div>
@@ -140,6 +145,8 @@ export default function Login() {
                     name="password"
                     type="password" 
                     placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     required 
                   />
                 </div>

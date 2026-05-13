@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, ItemStatus } from '@/app/generated/prisma';
-import { calculateItemStatus, getStatusStatistics, filterItemsByStatus, type ItemWithRelations } from '@/app/lib/itemStatus';
+import { PrismaClient } from '@prisma/client';
+import { calculateItemStatus, getStatusStatistics, filterItemsByStatus, type ItemWithRelations, ItemStatus } from '@/app/lib/itemStatus';
 
 const prisma = new PrismaClient();
 
@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const itemType = searchParams.get('itemType') || '';
     const subject = searchParams.get('subject') || '';
     const status = searchParams.get('status') as ItemStatus | null;
+    const availableOnly = searchParams.get('availableOnly') === 'true';
     const includeStats = searchParams.get('includeStats') === 'true';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
@@ -20,12 +21,30 @@ export async function GET(request: NextRequest) {
     const whereClause: any = {};
     
     if (search) {
-      whereClause.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { author: { contains: search, mode: 'insensitive' } },
-        { isbn: { contains: search, mode: 'insensitive' } },
-        { keywords: { contains: search, mode: 'insensitive' } }
-      ];
+      const searchTerm = search.trim();
+      if (searchTerm) {
+        // For case-insensitive search, we'll use multiple variations
+        const searchLower = searchTerm.toLowerCase();
+        const searchUpper = searchTerm.toUpperCase();
+        const searchCapitalized = searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1).toLowerCase();
+        
+        whereClause.OR = [
+          { title: { contains: searchTerm } },
+          { title: { contains: searchLower } },
+          { title: { contains: searchUpper } },
+          { title: { contains: searchCapitalized } },
+          { author: { contains: searchTerm } },
+          { author: { contains: searchLower } },
+          { author: { contains: searchUpper } },
+          { author: { contains: searchCapitalized } },
+          { isbn: { contains: searchTerm } },
+          { keywords: { contains: searchTerm } },
+          { keywords: { contains: searchLower } },
+          { subject: { contains: searchTerm } },
+          { subject: { contains: searchLower } },
+          { subject: { contains: searchCapitalized } }
+        ];
+      }
     }
     
     if (itemType) {
@@ -33,11 +52,16 @@ export async function GET(request: NextRequest) {
     }
     
     if (subject) {
-      whereClause.subject = { contains: subject, mode: 'insensitive' };
+      whereClause.subject = { contains: subject };
     }
     
     // Only get visible items
     whereClause.isVisible = true;
+    
+    // Filter for available items only if requested
+    if (availableOnly) {
+      whereClause.availableCopies = { gt: 0 };
+    }
 
     // Get items with relations for status calculation
     const items = await prisma.item.findMany({
@@ -95,20 +119,59 @@ export async function GET(request: NextRequest) {
       })
     ]);
 
+    // Map items to match the patron browse page structure
+    const mappedItems = itemsWithStatus.map(item => ({
+      itemId: item.itemId,
+      title: item.title,
+      author: item.author,
+      isbn: item.isbn,
+      publisher: null, // Not available in current schema
+      publishedDate: null, // Not available in current schema
+      pages: null, // Not available in current schema
+      language: 'English', // Default value
+      genre: item.subject,
+      description: null, // Not available in current schema
+      subject: item.subject,
+      itemType: item.itemType,
+      price: item.price,
+      imageUrl: item.imageUrl,
+      totalCopies: item.totalCopies,
+      availableCopies: item.availableCopies,
+      condition: item.condition,
+      location: 'Main Library', // Default value
+      addedDate: item.createdAt?.toISOString(),
+      lastUpdated: item.updatedAt?.toISOString(),
+      isAvailable: item.availableCopies > 0,
+      status: item.availableCopies > 0 ? 'AVAILABLE' : 'BORROWED'
+    }));
+
+    // Get additional filter options for patron page compatibility
+    const [languages, conditions, locations] = await Promise.all([
+      // Languages - using default values since not in schema
+      Promise.resolve(['English', 'Spanish', 'French']),
+      // Conditions - get from enum values
+      Promise.resolve(['EXCELLENT', 'GOOD', 'FAIR', 'POOR']),
+      // Locations - using default values since not in schema  
+      Promise.resolve(['Main Library', 'Reference Section', 'Periodicals'])
+    ]);
+
     const response: any = {
-      items: itemsWithStatus,
+      items: mappedItems,
       pagination: {
         page,
         limit,
-        totalCount: totalFilteredCount,
-        totalPages: Math.ceil(totalFilteredCount / limit),
+        total: totalFilteredCount, // Change from totalCount to total
+        pages: Math.ceil(totalFilteredCount / limit), // Change from totalPages to pages
         hasNext: page < Math.ceil(totalFilteredCount / limit),
         hasPrev: page > 1
       },
       filters: {
+        categories: subjects.map(s => s.subject).filter(Boolean),
         subjects: subjects.map(s => s.subject).filter(Boolean),
         itemTypes: itemTypes.map(t => t.itemType).filter(Boolean),
-        availableStatuses: Object.values(ItemStatus)
+        languages: languages,
+        conditions: conditions,
+        locations: locations
       }
     };
 
@@ -134,11 +197,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     // Validate required fields
-    const { title, author, itemType, price, totalCopies } = body;
+    const { title, author, itemType, price, totalCopies, condition } = body;
     
-    if (!title || !author || !itemType || !price || !totalCopies) {
+    if (!title || !author || !itemType || !price || !totalCopies || !condition) {
       return NextResponse.json(
-        { error: 'Missing required fields: title, author, itemType, price, totalCopies' },
+        { error: 'Missing required fields: title, author, itemType, price, totalCopies, condition' },
         { status: 400 }
       );
     }
@@ -156,6 +219,8 @@ export async function POST(request: NextRequest) {
         imageUrl: body.imageUrl?.trim() || null,
         totalCopies: parseInt(totalCopies),
         availableCopies: parseInt(totalCopies), // Initially all copies are available
+        condition: condition.trim(),
+        maintenanceNotes: body.maintenanceNotes?.trim() || null,
         isVisible: true,
       },
     });

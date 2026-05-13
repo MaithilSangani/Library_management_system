@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, ItemStatus, ItemCondition } from '@/app/generated/prisma';
+import { PrismaClient, ItemStatus, ItemCondition } from '@prisma/client';
 import { 
   calculateItemStatus, 
   getStatusStatistics, 

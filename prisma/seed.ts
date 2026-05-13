@@ -93,7 +93,7 @@ async function main() {
     });
   }
 
-  // Create some sample books
+  // Create some sample books with proper book cover images
   await prisma.item.upsert({
     where: { isbn: '9780743273565' },
     update: {},
@@ -105,7 +105,7 @@ async function main() {
       keywords: 'classic, american, literature',
       itemType: 'Book',
       price: 12.99,
-      imageUrl: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop',
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780743273565-M.jpg',
       totalCopies: 3,
       availableCopies: 3,
     },
@@ -122,6 +122,7 @@ async function main() {
       keywords: 'classic, drama, social issues',
       itemType: 'Book',
       price: 14.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780446310789-M.jpg',
       totalCopies: 2,
       availableCopies: 2,
     },
@@ -138,6 +139,7 @@ async function main() {
       keywords: 'algorithms, computer science, programming',
       itemType: 'Book',
       price: 89.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780262033848-M.jpg',
       totalCopies: 5,
       availableCopies: 5,
     },
@@ -155,6 +157,7 @@ async function main() {
       keywords: 'dystopian, science fiction, classic',
       itemType: 'Book',
       price: 15.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780061120084-M.jpg',
       totalCopies: 4,
       availableCopies: 4,
     },
@@ -171,6 +174,7 @@ async function main() {
       keywords: 'dystopian, political, surveillance',
       itemType: 'Book',
       price: 13.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780451524935-M.jpg',
       totalCopies: 6,
       availableCopies: 5,
     },
@@ -187,6 +191,7 @@ async function main() {
       keywords: 'cosmology, black holes, universe',
       itemType: 'Book',
       price: 18.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780553380163-M.jpg',
       totalCopies: 3,
       availableCopies: 3,
     },
@@ -203,6 +208,7 @@ async function main() {
       keywords: 'post-apocalyptic, pulitzer prize, survival',
       itemType: 'Book',
       price: 16.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780307387899-M.jpg',
       totalCopies: 2,
       availableCopies: 2,
     },
@@ -219,6 +225,7 @@ async function main() {
       keywords: 'fantasy, epic, middle-earth',
       itemType: 'Book',
       price: 25.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780544003415-M.jpg',
       totalCopies: 4,
       availableCopies: 3,
     },
@@ -235,6 +242,7 @@ async function main() {
       keywords: 'fantasy, political intrigue, dragons',
       itemType: 'Book',
       price: 22.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780553103540-M.jpg',
       totalCopies: 3,
       availableCopies: 2,
     },
@@ -252,6 +260,7 @@ async function main() {
       keywords: 'java, programming, best practices',
       itemType: 'Book',
       price: 52.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780134685991-M.jpg',
       totalCopies: 4,
       availableCopies: 4,
     },
@@ -268,6 +277,7 @@ async function main() {
       keywords: 'react, javascript, web development',
       itemType: 'Book',
       price: 44.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9781449331818-M.jpg',
       totalCopies: 3,
       availableCopies: 3,
     },
@@ -284,6 +294,7 @@ async function main() {
       keywords: 'usability, web design, user experience',
       itemType: 'Book',
       price: 39.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780321751041-M.jpg',
       totalCopies: 2,
       availableCopies: 2,
     },
@@ -300,6 +311,7 @@ async function main() {
       keywords: 'javascript, programming, web development',
       itemType: 'Book',
       price: 35.99,
+      imageUrl: 'https://covers.openlibrary.org/b/isbn/9780596517748-M.jpg',
       totalCopies: 5,
       availableCopies: 4,
     },
@@ -913,9 +925,136 @@ async function main() {
     },
   });
 
+  console.log('\n📚 Adding sample transaction data...');
+  
+  // Get some items for creating transactions
+  const items = await prisma.item.findMany({
+    take: 10,
+    select: {
+      itemId: true,
+      title: true
+    }
+  });
+
+  // Get the first patron (student) for demo transactions
+  const demoPatron = await prisma.patron.findFirst({
+    where: {
+      patronEmail: 'student@library.com'
+    }
+  });
+
+  if (demoPatron && items.length > 0) {
+    // Create some completed transactions (reading history)
+    const currentDate = new Date();
+    
+    // Transaction 1: Completed - "To Kill a Mockingbird" (30 days ago, returned 15 days ago)
+    if (items[0]) {
+      await prisma.transaction.create({
+        data: {
+          patronId: demoPatron.patronId,
+          itemId: items[0].itemId,
+          borrowedAt: new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000),
+          dueDate: new Date(currentDate.getTime() - 16 * 24 * 60 * 60 * 1000),
+          returnedAt: new Date(currentDate.getTime() - 15 * 24 * 60 * 60 * 1000),
+          isReturned: true,
+          rating: 5,
+          review: 'An excellent classic that everyone should read!',
+          renewalCount: 0
+        }
+      });
+    }
+
+    // Transaction 2: Completed - "1984" (45 days ago, returned 30 days ago)
+    if (items[1]) {
+      await prisma.transaction.create({
+        data: {
+          patronId: demoPatron.patronId,
+          itemId: items[1].itemId,
+          borrowedAt: new Date(currentDate.getTime() - 45 * 24 * 60 * 60 * 1000),
+          dueDate: new Date(currentDate.getTime() - 31 * 24 * 60 * 60 * 1000),
+          returnedAt: new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000),
+          isReturned: true,
+          rating: 4,
+          review: 'Thought-provoking dystopian masterpiece.',
+          renewalCount: 1
+        }
+      });
+    }
+
+    // Transaction 3: Completed - "The Great Gatsby" (60 days ago, returned 50 days ago)
+    if (items[2]) {
+      await prisma.transaction.create({
+        data: {
+          patronId: demoPatron.patronId,
+          itemId: items[2].itemId,
+          borrowedAt: new Date(currentDate.getTime() - 60 * 24 * 60 * 60 * 1000),
+          dueDate: new Date(currentDate.getTime() - 46 * 24 * 60 * 60 * 1000),
+          returnedAt: new Date(currentDate.getTime() - 50 * 24 * 60 * 60 * 1000),
+          isReturned: true,
+          rating: 3,
+          renewalCount: 0
+        }
+      });
+    }
+
+    // Transaction 4: Completed - Programming book (90 days ago, returned 75 days ago)
+    if (items[3]) {
+      await prisma.transaction.create({
+        data: {
+          patronId: demoPatron.patronId,
+          itemId: items[3].itemId,
+          borrowedAt: new Date(currentDate.getTime() - 90 * 24 * 60 * 60 * 1000),
+          dueDate: new Date(currentDate.getTime() - 76 * 24 * 60 * 60 * 1000),
+          returnedAt: new Date(currentDate.getTime() - 75 * 24 * 60 * 60 * 1000),
+          isReturned: true,
+          rating: 5,
+          review: 'Great technical resource for developers.',
+          renewalCount: 2
+        }
+      });
+    }
+
+    // Transaction 5: Currently borrowed book (10 days ago, due in 4 days)
+    if (items[4]) {
+      await prisma.transaction.create({
+        data: {
+          patronId: demoPatron.patronId,
+          itemId: items[4].itemId,
+          borrowedAt: new Date(currentDate.getTime() - 10 * 24 * 60 * 60 * 1000),
+          dueDate: new Date(currentDate.getTime() + 4 * 24 * 60 * 60 * 1000),
+          isReturned: false,
+          renewalCount: 0
+        }
+      });
+    }
+
+    // Transaction 6: Overdue returned book (120 days ago, was due 110 days ago, returned 100 days ago)
+    if (items[5]) {
+      await prisma.transaction.create({
+        data: {
+          patronId: demoPatron.patronId,
+          itemId: items[5].itemId,
+          borrowedAt: new Date(currentDate.getTime() - 120 * 24 * 60 * 60 * 1000),
+          dueDate: new Date(currentDate.getTime() - 110 * 24 * 60 * 60 * 1000),
+          returnedAt: new Date(currentDate.getTime() - 100 * 24 * 60 * 60 * 1000),
+          isReturned: true,
+          finePaid: 15.0, // 10 days overdue at $1.50/day
+          rating: 4,
+          renewalCount: 0
+        }
+      });
+    }
+
+    console.log('✅ Sample transactions created for testing!');
+  }
+
   console.log('\n📚 Library Items Summary:');
   const itemCount = await prisma.item.count();
   console.log(`Total items in library: ${itemCount}`);
+  
+  const transactionCount = await prisma.transaction.count();
+  console.log(`Total transactions: ${transactionCount}`);
+  
   console.log('\nCategories added:');
   console.log('📖 Fiction & Literature');
   console.log('💻 Computer Science & Technology');

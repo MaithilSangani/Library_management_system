@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patron Management Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #2563eb;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .test-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: background 0.2s;
+        }
+        
+        .test-button:hover {
+            background: #2563eb;
+        }
+        
+        .test-button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        
+        .result {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+        }
+        
+        .success {
+            background: #dcfce7;
+            border: 1px solid #16a34a;
+            color: #15803d;
+        }
+        
+        .error {
+            background: #fecaca;
+            border: 1px solid #dc2626;
+            color: #dc2626;
+        }
+        
+        .info {
+            background: #dbeafe;
+            border: 1px solid #2563eb;
+            color: #1d4ed8;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-success { background: #22c55e; }
+        .status-error { background: #ef4444; }
+        .status-pending { background: #f59e0b; }
+        
+        .results-summary {
+            background: #f1f5f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+        
+        .patron-preview {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Patron Management System Test</h1>
+        
+        <div class="info result">
+            <strong>Instructions:</strong>
+            1. Make sure your Next.js development server is running (npm run dev)
+            2. Make sure you're logged in as a librarian
+            3. Click the buttons below to test each function
+            4. Check the results and console for any errors
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 API Connectivity Test</h3>
+            <button class="test-button" onclick="testConnection()">Test Server Connection</button>
+            <div id="connection-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 Fetch Patrons Test</h3>
+            <button class="test-button" onclick="testFetchPatrons()">Fetch All Patrons</button>
+            <button class="test-button" onclick="testSearchPatrons()">Test Search</button>
+            <button class="test-button" onclick="testFilterPatrons()">Test Filters</button>
+            <div id="fetch-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>👤 Individual Patron Operations</h3>
+            <button class="test-button" onclick="testViewPatron()">View Patron Details</button>
+            <button class="test-button" onclick="testCreatePatron()">Create Test Patron</button>
+            <button class="test-button" onclick="testUpdatePatron()">Update Test Patron</button>
+            <button class="test-button" onclick="testDeletePatron()">Delete Test Patron</button>
+            <div id="crud-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔧 UI Component Test</h3>
+            <button class="test-button" onclick="testUIComponents()">Test UI Components</button>
+            <div id="ui-result"></div>
+        </div>
+
+        <div class="results-summary">
+            <h3>📊 Test Results Summary</h3>
+            <div id="summary-result">
+                <p>Run tests to see results...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost:3000';
+        const testResults = {
+            connection: null,
+            fetch: null,
+            search: null,
+            filter: null,
+            view: null,
+            create: null,
+            update: null,
+            delete: null,
+            ui: null
+        };
+        let testPatronId = null;
+
+        function showLoading(elementId) {
+            document.getElementById(elementId).innerHTML = '<div class="loading"></div> Running test...';
+        }
+
+        function showResult(elementId, success, message, data = null) {
+            const className = success ? 'success' : 'error';
+            const icon = success ? '✅' : '❌';
+            let content = `<div class="${className} result">${icon} ${message}`;
+            
+            if (data) {
+                content += '\n\nDetails:\n' + JSON.stringify(data, null, 2);
+            }
+            
+            content += '</div>';
+            document.getElementById(elementId).innerHTML = content;
+            
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const summaryDiv = document.getElementById('summary-result');
+            let summary = '';
+            let passed = 0;
+            let total = 0;
+
+            for (const [test, result] of Object.entries(testResults)) {
+                if (result !== null) {
+                    total++;
+                    if (result === true) passed++;
+                    
+                    const statusClass = result === true ? 'status-success' : 'status-error';
+                    const statusText = result === true ? 'PASS' : 'FAIL';
+                    summary += `<p><span class="status-indicator ${statusClass}"></span>${test.toUpperCase()}: ${statusText}</p>`;
+                }
+            }
+
+            if (total > 0) {
+                const percentage = Math.round((passed / total) * 100);
+                summary = `<h4>Tests Passed: ${passed}/${total} (${percentage}%)</h4>` + summary;
+            }
+
+            summaryDiv.innerHTML = summary || '<p>No tests completed yet.</p>';
+        }
+
+        async function testConnection() {
+            showLoading('connection-result');
+            try {
+                const response = await fetch(`${BASE_URL}/api/librarian/patrons?page=1&limit=1`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    testResults.connection = true;
+                    showResult('connection-result', true, 'Server connection successful', {
+                        status: response.status,
+                        totalPatrons: data.stats?.totalPatrons || 'Unknown'
+                    });
+                } else {
+                    testResults.connection = false;
+                    showResult('connection-result', false, 'Server responded but with error', {
+                        status: response.status,
+                        error: data.error
+                    });
+                }
+            } catch (error) {
+                testResults.connection = false;
+                showResult('connection-result', false, 'Connection failed: ' + error.message);
+            }
+        }
+
+        async function testFetchPatrons() {
+            showLoading('fetch-result');
+            try {
+                const response = await fetch(`${BASE_URL}/api/librarian/patrons?page=1&limit=5`);
+                const data = await response.json();
+                
+                if (response.ok && data.patrons) {
+                    testResults.fetch = true;
+                    
+                    // Store first patron ID for other tests
+                    if (data.patrons.length > 0) {
+                        testPatronId = data.patrons[0].patronId;
+                    }
+                    
+                    showResult('fetch-result', true, `Successfully fetched ${data.patrons.length} patrons`, {
+                        totalCount: data.pagination.totalCount,
+                        stats: data.stats,
+                        firstPatron: data.patrons[0] ? {
+                            id: data.patrons[0].patronId,
+                            name: `${data.patrons[0].patronFirstName} ${data.patrons[0].patronLastName}`,
+                            email: data.patrons[0].patronEmail,
+                            type: data.patrons[0].userType
+                        } : 'No patrons found'
+                    });
+                } else {
+                    testResults.fetch = false;
+                    showResult('fetch-result', false, 'Failed to fetch patrons', data);
+                }
+            } catch (error) {
+                testResults.fetch = false;
+                showResult('fetch-result', false, 'Fetch failed: ' + error.message);
+            }
+        }
+
+        async function testSearchPatrons() {
+            showLoading('fetch-result');
+            try {
+                const response = await fetch(`${BASE_URL}/api/librarian/patrons?page=1&limit=5&search=student`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    testResults.search = true;
+                    showResult('fetch-result', true, `Search returned ${data.patrons.length} results for 'student'`);
+                } else {
+                    testResults.search = false;
+                    showResult('fetch-result', false, 'Search failed', data);
+                }
+            } catch (error) {
+                testResults.search = false;
+                showResult('fetch-result', false, 'Search failed: ' + error.message);
+            }
+        }
+
+        async function testFilterPatrons() {
+            showLoading('fetch-result');
+            try {
+                const response = await fetch(`${BASE_URL}/api/librarian/patrons?page=1&limit=5&userType=student`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    testResults.filter = true;
+                    showResult('fetch-result', true, `Filter returned ${data.patrons.length} student patrons`);
+                } else {
+                    testResults.filter = false;
+                    showResult('fetch-result', false, 'Filter failed', data);
+                }
+            } catch (error) {
+                testResults.filter = false;
+                showResult('fetch-result', false, 'Filter failed: ' + error.message);
+            }
+        }
+
+        async function testViewPatron() {
+            if (!testPatronId) {
+                showResult('crud-result', false, 'No patron ID available. Run "Fetch All Patrons" first.');
+                return;
+            }
+            
+            showLoading('crud-result');
+            try {
+                const response = await fetch(`${BASE_URL}/api/librarian/patrons/${testPatronId}`);
+                const data = await response.json();
+                
+                if (response.ok && data.patron) {
+                    testResults.view = true;
+                    showResult('crud-result', true, `Successfully viewed patron details for ID ${testPatronId}`, {
+                        name: `${data.patron.patronFirstName} ${data.patron.patronLastName}`,
+                        email: data.patron.patronEmail,
+                        type: data.patron.userType,
+                        status: data.patron.status,
+                        loans: data.patron.currentLoans,
+                        reservations: data.patron.reservations
+                    });
+                } else {
+                    testResults.view = false;
+                    showResult('crud-result', false, 'Failed to view patron', data);
+                }
+            } catch (error) {
+                testResults.view = false;
+                showResult('crud-result', false, 'View patron failed: ' + error.message);
+            }
+        }
+
+        async function testCreatePatron() {
+            showLoading('crud-result');
+            
+            const testPatronData = {
+                patronFirstName: 'Test',
+                patronLastName: 'User',
+                patronEmail: `testuser${Date.now()}@library.edu`,
+                patronPassword: 'TestPass123',
+                userType: 'student',
+                studentDetails: {
+                    department: 'Computer Science',
+                    semester: 3,
+                    rollNo: 12345,
+                    enrollmentNumber: 987654
+                }
+            };
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/librarian/patrons`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testPatronData),
+                });
+                const data = await response.json();
+
+                if (response.ok && data.patron) {
+                    testResults.create = true;
+                    testPatronId = data.patron.patronId; // Update test patron ID
+                    showResult('crud-result', true, `Successfully created patron with ID ${data.patron.patronId}`, {
+                        id: data.patron.patronId,
+                        name: `${data.patron.patronFirstName} ${data.patron.patronLastName}`,
+                        email: data.patron.patronEmail,
+                        type: data.patron.userType
+                    });
+                } else {
+                    testResults.create = false;
+                    showResult('crud-result', false, 'Failed to create patron', data);
+                }
+            } catch (error) {
+                testResults.create = false;
+                showResult('crud-result', false, 'Create patron failed: ' + error.message);
+            }
+        }
+
+        async function testUpdatePatron() {
+            if (!testPatronId) {
+                showResult('crud-result', false, 'No test patron available. Create a patron first.');
+                return;
+            }
+
+            showLoading('crud-result');
+            
+            const updateData = {
+                patronFirstName: 'Updated',
+                patronLastName: 'TestUser',
+                patronEmail: `updated${Date.now()}@library.edu`,
+                patronPassword: '',
+                userType: 'faculty',
+                facultyDetails: {
+                    department: 'Information Technology'
+                }
+            };
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/librarian/patrons/${testPatronId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(updateData),
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    testResults.update = true;
+                    showResult('crud-result', true, `Successfully updated patron ${testPatronId}`, data.patron);
+                } else {
+                    testResults.update = false;
+                    showResult('crud-result', false, 'Failed to update patron', data);
+                }
+            } catch (error) {
+                testResults.update = false;
+                showResult('crud-result', false, 'Update patron failed: ' + error.message);
+            }
+        }
+
+        async function testDeletePatron() {
+            if (!testPatronId) {
+                showResult('crud-result', false, 'No test patron available. Create a patron first.');
+                return;
+            }
+
+            showLoading('crud-result');
+            
+            try {
+                const response = await fetch(`${BASE_URL}/api/librarian/patrons/${testPatronId}`, {
+                    method: 'DELETE',
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    testResults.delete = true;
+                    showResult('crud-result', true, `Successfully deleted patron ${testPatronId}`, data);
+                    testPatronId = null; // Clear the test patron ID
+                } else {
+                    testResults.delete = false;
+                    showResult('crud-result', false, 'Failed to delete patron', data);
+                }
+            } catch (error) {
+                testResults.delete = false;
+                showResult('crud-result', false, 'Delete patron failed: ' + error.message);
+            }
+        }
+
+        function testUIComponents() {
+            showLoading('ui-result');
+            
+            // Test if we're on the patron management page
+            const isOnPatronPage = window.location.pathname.includes('/librarian/patrons');
+            const hasPatronElements = !!document.querySelector('[data-testid="patron-card"], .patron-card, button:contains("Add Patron")');
+            
+            let uiTests = [];
+            
+            // Check if we can access the patron management page
+            if (isOnPatronPage) {
+                uiTests.push('✅ Currently on patron management page');
+            } else {
+                uiTests.push('⚠️ Not currently on patron management page - navigate to /librarian/patrons to test UI');
+            }
+            
+            // Check for common UI elements
+            const addButton = document.querySelector('button:contains("Add"), [data-testid="add-patron"]');
+            if (addButton) {
+                uiTests.push('✅ Add patron button found');
+            } else {
+                uiTests.push('❌ Add patron button not found');
+            }
+            
+            testResults.ui = isOnPatronPage;
+            
+            showResult('ui-result', true, 'UI Component Test Results:\n' + uiTests.join('\n'), {
+                url: window.location.href,
+                pathname: window.location.pathname,
+                hasPatronElements
+            });
+        }
+
+        // Initialize
+        window.onload = function() {
+            console.log('Patron Management Test Page Loaded');
+            console.log('Make sure your development server is running on localhost:3000');
+        };
+    </script>
+</body>
+</html>

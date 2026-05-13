@@ -9,6 +9,13 @@ export interface User {
   email: string;
   role: UserRole;
   avatar?: string;
+  patronId?: number;
+  adminId?: number;
+  librarianId?: number;
+  // Role-specific email properties for API calls
+  patronEmail?: string;
+  adminEmail?: string;
+  librarianEmail?: string;
 }
 
 interface AuthContextType {
@@ -84,7 +91,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           name: userName,
           email: email,
           role: userRole,
-          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=${userRole === 'ADMIN' ? '1e3a8a' : userRole === 'LIBRARIAN' ? '059669' : '7c2d12'}&color=ffffff`
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=${userRole === 'ADMIN' ? '1e3a8a' : userRole === 'LIBRARIAN' ? '059669' : '7c2d12'}&color=ffffff`,
+          patronId: userRole === 'PATRON' ? dbUser.patronId : undefined,
+          adminId: userRole === 'ADMIN' ? dbUser.adminId : undefined,
+          librarianId: userRole === 'LIBRARIAN' ? dbUser.librarianId : undefined,
+          // Add role-specific email properties for API calls
+          patronEmail: userRole === 'PATRON' ? email : undefined,
+          adminEmail: userRole === 'ADMIN' ? email : undefined,
+          librarianEmail: userRole === 'LIBRARIAN' ? email : undefined
         };
 
         setUser(transformedUser);

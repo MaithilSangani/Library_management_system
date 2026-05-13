@@ -8,11 +8,11 @@ import { useRouter } from "next/navigation";
 import { useAuth } from './contexts/AuthContext';
 
 export default function Landing() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && user) {
+    if (user) {
       // Redirect based on user role
       switch (user.role) {
         case 'ADMIN':
@@ -28,15 +28,7 @@ export default function Landing() {
           router.push('/login');
       }
     }
-  }, [user, loading, router]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-      </div>
-    );
-  }
+  }, [user, router]);
 
   // Show landing page only if user is not authenticated
   if (user) {

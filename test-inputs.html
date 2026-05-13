@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Input Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .test-results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Text Input Testing</h1>
+    <p>This page tests if text inputs allow unlimited character entry.</p>
+    
+    <form>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" placeholder="Enter your email address">
+        </div>
+        
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" placeholder="Enter your password">
+        </div>
+        
+        <div class="form-group">
+            <label for="firstName">First Name:</label>
+            <input type="text" id="firstName" name="firstName" placeholder="Enter your first name">
+        </div>
+        
+        <div class="form-group">
+            <label for="lastName">Last Name:</label>
+            <input type="text" id="lastName" name="lastName" placeholder="Enter your last name">
+        </div>
+        
+        <div class="form-group">
+            <label for="description">Description (Textarea):</label>
+            <textarea id="description" name="description" rows="4" placeholder="Enter a long description to test unlimited text entry..."></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="search">Search:</label>
+            <input type="text" id="search" name="search" placeholder="Search for something...">
+        </div>
+    </form>
+    
+    <div class="test-results">
+        <h2>Test Instructions:</h2>
+        <ol>
+            <li>Try typing in each input field above</li>
+            <li>Type multiple characters and words</li>
+            <li>Try pasting long text</li>
+            <li>Verify that all characters are retained and displayed</li>
+            <li>The issue was that inputs only accepted one character</li>
+        </ol>
+        
+        <h3>Fixed Issues:</h3>
+        <ul>
+            <li>✅ Login page inputs now use controlled components</li>
+            <li>✅ Signup page inputs now use controlled components</li>
+            <li>✅ Admin user management dialog inputs now use controlled components</li>
+            <li>✅ All form inputs have proper value and onChange handlers</li>
+        </ul>
+        
+        <h3>Changes Made:</h3>
+        <ul>
+            <li>Converted uncontrolled form inputs to controlled components</li>
+            <li>Added state management for all form fields</li>
+            <li>Implemented proper onChange handlers</li>
+            <li>Ensured all text inputs support unlimited character entry</li>
+        </ul>
+    </div>
+    
+    <script>
+        // Add some basic testing functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputs = document.querySelectorAll('input, textarea');
+            inputs.forEach(input => {
+                input.addEventListener('input', function() {
+                    console.log(`${this.name || this.id}: "${this.value}" (${this.value.length} characters)`);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

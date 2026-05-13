@@ -1,31 +1,10 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../app/generated/prisma"
 }
 
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
-}
-
-enum ItemStatus {
-  AVAILABLE
-  BORROWED
-  RESERVED
-  OVERDUE
-  UNDER_MAINTENANCE
-  DAMAGED
-  LOST
-  OUT_OF_STOCK
-}
-
-enum ItemCondition {
-  EXCELLENT
-  GOOD
-  FAIR
-  POOR
-  DAMAGED
-  UNUSABLE
 }
 
 model admin {
@@ -47,25 +26,26 @@ model faculty {
 }
 
 model item {
-  itemId           Int           @id @default(autoincrement())
-  title            String
-  author           String
-  isbn             String?       @unique(map: "Item_isbn_key")
-  subject          String?
-  keywords         String?
-  itemType         String
-  price            Float
-  imageUrl         String?
-  totalCopies      Int           @default(1)
-  availableCopies  Int           @default(1)
-  condition        ItemCondition @default(EXCELLENT)
-  maintenanceNotes String?
-  isVisible        Boolean       @default(true)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  reservation      reservation[]
-  transaction      transaction[]
-  statusHistory    ItemStatusHistory[]
+  itemId            Int                 @id @default(autoincrement())
+  title             String
+  author            String
+  isbn              String?             @unique(map: "Item_isbn_key")
+  subject           String?
+  keywords          String?
+  itemType          String
+  price             Float
+  imageUrl          String?
+  totalCopies       Int                 @default(1)
+  availableCopies   Int                 @default(1)
+  isVisible         Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  condition         ItemCondition       @default(EXCELLENT)
+  maintenanceNotes  String?
+  borrowrequest     borrowrequest[]
+  itemstatushistory itemstatushistory[]
+  reservation       reservation[]
+  transaction       transaction[]
 }
 
 model librarian {
@@ -82,7 +62,7 @@ model librarysettings {
   borrowingLimit    Int      @default(5)
   loanPeriodDays    Int      @default(14)
   finePerDay        Float    @default(1)
-  updatedAt         DateTime      @updatedAt
+  updatedAt         DateTime @updatedAt
   updatedByAdminId  Int?
   admin             admin?   @relation(fields: [updatedByAdminId], references: [adminId], map: "LibrarySettings_updatedByAdminId_fkey")
 
@@ -90,17 +70,20 @@ model librarysettings {
 }
 
 model patron {
-  patronId               Int           @id @default(autoincrement())
-  patronEmail            String        @unique(map: "Patron_patronEmail_key")
+  patronId               Int             @id @default(autoincrement())
+  patronEmail            String          @unique(map: "Patron_patronEmail_key")
   patronPassword         String
   patronFirstName        String
   patronLastName         String
-  isStudent              Boolean       @default(false)
-  isFaculty              Boolean       @default(false)
-  patronCreatedAt        DateTime      @default(now())
-  patronUpdatedAt        DateTime      @updatedAt
+  isStudent              Boolean         @default(false)
+  isFaculty              Boolean         @default(false)
+  patronCreatedAt        DateTime        @default(now())
+  patronUpdatedAt        DateTime        @updatedAt
   patronOriginalPassword String?
+  borrowrequest          borrowrequest[]
   faculty                faculty?
+  notification           notification[]
+  payment                payment[]
   reservation            reservation[]
   student                student?
   transaction            transaction[]
@@ -130,29 +113,171 @@ model student {
 }
 
 model transaction {
-  transactionId Int       @id @default(autoincrement())
-  borrowedAt    DateTime  @default(now())
+  transactionId Int           @id @default(autoincrement())
+  borrowedAt    DateTime      @default(now())
   returnedAt    DateTime?
   dueDate       DateTime
-  isReturned    Boolean   @default(false)
+  isReturned    Boolean       @default(false)
   finePaid      Float?
   itemId        Int
   patronId      Int
-  item          item      @relation(fields: [itemId], references: [itemId], map: "Transaction_itemId_fkey")
-  patron        patron    @relation(fields: [patronId], references: [patronId], map: "Transaction_patronId_fkey")
+  rating        Int?
+  renewalCount  Int           @default(0)
+  review        String?
+  item          item          @relation(fields: [itemId], references: [itemId], map: "Transaction_itemId_fkey")
+  patron        patron        @relation(fields: [patronId], references: [patronId], map: "Transaction_patronId_fkey")
+  payment       payment[]
 
   @@index([itemId], map: "Transaction_itemId_fkey")
   @@index([patronId], map: "Transaction_patronId_fkey")
 }
 
-model ItemStatusHistory {
-  historyId     Int        @id @default(autoincrement())
-  status        ItemStatus
-  previousStatus ItemStatus?
-  reason        String?
-  changedBy     String     // Could be system, admin, librarian, or patron email/id
-  changedAt     DateTime   @default(now())
-  notes         String?
-  itemId        Int
-  item          item       @relation(fields: [itemId], references: [itemId])
+model borrowrequest {
+  requestId       Int                  @id @default(autoincrement())
+  patronId        Int
+  itemId          Int
+  status          borrowrequest_status @default(PENDING)
+  requestedAt     DateTime             @default(now())
+  processedAt     DateTime?
+  processedBy     String?
+  notes           String?
+  rejectionReason String?
+  expiresAt       DateTime
+  item            item                 @relation(fields: [itemId], references: [itemId], map: "BorrowRequest_itemId_fkey")
+  patron          patron               @relation(fields: [patronId], references: [patronId], map: "BorrowRequest_patronId_fkey")
+
+  @@unique([patronId, itemId], map: "BorrowRequest_patronId_itemId_key")
+  @@index([itemId], map: "BorrowRequest_itemId_idx")
+  @@index([patronId], map: "BorrowRequest_patronId_idx")
+  @@index([requestedAt], map: "BorrowRequest_requestedAt_idx")
+  @@index([status], map: "BorrowRequest_status_idx")
+}
+
+
+model itemstatushistory {
+  historyId      Int                               @id @default(autoincrement())
+  status         itemstatushistory_status
+  previousStatus itemstatushistory_previousStatus?
+  reason         String?
+  changedBy      String
+  changedAt      DateTime                          @default(now())
+  notes          String?
+  itemId         Int
+  item           item                              @relation(fields: [itemId], references: [itemId], map: "ItemStatusHistory_itemId_fkey")
+
+  @@index([itemId], map: "ItemStatusHistory_itemId_fkey")
+}
+
+model notification {
+  notificationId Int                 @id @default(autoincrement())
+  recipientId    Int
+  recipientType  String
+  type           notification_type
+  status         notification_status @default(UNREAD)
+  title          String
+  message        String              @db.Text
+  relatedId      Int?
+  relatedType    String?
+  createdAt      DateTime            @default(now())
+  readAt         DateTime?
+  patron         patron              @relation(fields: [recipientId], references: [patronId], map: "Notification_recipientId_fkey")
+
+  @@index([createdAt], map: "Notification_createdAt_idx")
+  @@index([recipientId, recipientType], map: "Notification_recipientId_recipientType_idx")
+  @@index([status], map: "Notification_status_idx")
+  @@index([type], map: "Notification_type_idx")
+}
+
+model payment {
+  paymentId       Int            @id @default(autoincrement())
+  patronId        Int
+  transactionId   Int?
+  amount          Float
+  paymentType     payment_type
+  description     String?
+  paymentStatus   payment_status @default(PENDING)
+  dueDate         DateTime?
+  paidDate        DateTime?
+  paymentMethod   String?
+  referenceNumber String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  patron          patron         @relation(fields: [patronId], references: [patronId], map: "Payment_patronId_fkey")
+  transaction     transaction?   @relation(fields: [transactionId], references: [transactionId], map: "Payment_transactionId_fkey")
+
+  @@index([patronId], map: "Payment_patronId_idx")
+  @@index([transactionId], map: "Payment_transactionId_idx")
+  @@index([paymentStatus], map: "Payment_paymentStatus_idx")
+  @@index([dueDate], map: "Payment_dueDate_idx")
+}
+
+
+enum ItemCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+  UNUSABLE
+}
+
+enum itemstatushistory_status {
+  AVAILABLE
+  BORROWED
+  RESERVED
+  OVERDUE
+  UNDER_MAINTENANCE
+  DAMAGED
+  LOST
+  OUT_OF_STOCK
+}
+
+enum itemstatushistory_previousStatus {
+  AVAILABLE
+  BORROWED
+  RESERVED
+  OVERDUE
+  UNDER_MAINTENANCE
+  DAMAGED
+  LOST
+  OUT_OF_STOCK
+}
+
+enum borrowrequest_status {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum notification_type {
+  BORROW_REQUEST
+  BORROW_APPROVED
+  BORROW_REJECTED
+  BOOK_OVERDUE
+  FINE_NOTICE
+  GENERAL
+}
+
+enum notification_status {
+  UNREAD
+  read
+}
+
+enum payment_type {
+  MEMBERSHIP_FEE
+  PROCESSING_FEE
+  LATE_FEE
+  FINE
+  DAMAGE_FEE
+  LOST_BOOK_FEE
+  OTHER
+}
+
+enum payment_status {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+  REFUNDED
 }

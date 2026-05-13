@@ -1,11 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Badge } from '@/app/components/ui/badge';
-import { Book, Search, Clock, Heart, AlertTriangle } from 'lucide-react';
+import { Book, Search, Clock, Heart, AlertTriangle, Loader2, BookOpen, RefreshCw } from 'lucide-react';
+import React from 'react';
+import { toast } from 'sonner';
+import { useAuth } from '@/app/contexts/AuthContext';
+import { usePatronStats } from '@/app/hooks/usePatronStats';
+import Link from 'next/link';
 
 interface BookResult {
   id: string;
@@ -52,22 +57,79 @@ const mockBooks: BookResult[] = [
 ];
 
 export default function PatronDashboard() {
+  const { user } = useAuth();
+  const { stats, loading: statsLoading } = usePatronStats();
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<BookResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [currentBooks, setCurrentBooks] = useState<any[]>([]);
+  const [reservations, setReservations] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleSearch = () => {
+  // Fetch real patron data
+  const fetchPatronData = async (showLoading = false) => {
+    try {
+      if (showLoading) setRefreshing(true);
+      const response = await fetch('/api/patron/profile');
+      if (response.ok) {
+        const profileData = await response.json();
+        // Update current books and reservations from real data
+        setCurrentBooks(profileData.recentTransactions?.filter((t: any) => !t.isReturned) || []);
+        setReservations(profileData.reservations || []);
+      }
+    } catch (error) {
+      console.error('Error fetching patron data:', error);
+    } finally {
+      if (showLoading) setRefreshing(false);
+    }
+  };
+
+  const handleSearch = async () => {
     setIsSearching(true);
-    // Simulate search
-    setTimeout(() => {
+    try {
+      const response = await fetch(`/api/catalog?search=${encodeURIComponent(searchTerm)}&limit=5`);
+      if (response.ok) {
+        const data = await response.json();
+        const formattedResults = data.books?.map((book: any) => ({
+          id: book.itemId.toString(),
+          title: book.title,
+          author: book.author,
+          isbn: book.isbn || 'N/A',
+          category: book.subject || 'Unknown',
+          status: book.isAvailable ? 'Available' : 'Borrowed',
+          location: 'Library',
+          rating: 4.0
+        })) || [];
+        setSearchResults(formattedResults);
+      } else {
+        // Fallback to mock data if API fails
+        const results = mockBooks.filter(book =>
+          book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          book.author.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        setSearchResults(results);
+      }
+    } catch (error) {
+      console.error('Error searching:', error);
       const results = mockBooks.filter(book =>
         book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         book.author.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setSearchResults(results);
+    } finally {
       setIsSearching(false);
-    }, 500);
+    }
   };
+
+  // Fetch data on component mount and periodically
+  React.useEffect(() => {
+    if (user?.patronId) {
+      fetchPatronData();
+      // Auto-refresh every 30 seconds
+      const interval = setInterval(() => fetchPatronData(), 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -78,10 +140,32 @@ export default function PatronDashboard() {
     }
   };
 
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch {
+      return 'Invalid Date';
+    }
+  };
+
+  const getDaysLeft = (dueDateString: string) => {
+    const dueDate = new Date(dueDateString);
+    const today = new Date();
+    const diffTime = dueDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Welcome Back, John!</h1>
+        <h1 className="text-3xl font-bold tracking-tight">
+          Welcome Back{user?.patronFirstName ? `, ${user.patronFirstName}` : ''}!
+        </h1>
         <p className="text-muted-foreground">
           Discover and manage your library experience
         </p>
@@ -152,13 +236,22 @@ export default function PatronDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Books Borrowed</CardTitle>
-            <Book className="h-4 w-4 text-muted-foreground" />
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-muted-foreground">
-              2 due this week
-            </p>
+            {statsLoading ? (
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading...</span>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{stats?.totalBorrowed || 0}</div>
+                <p className="text-xs text-muted-foreground">
+                  {stats?.overdueBooks ? `${stats.overdueBooks} overdue` : 'All up to date'}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -168,10 +261,19 @@ export default function PatronDashboard() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">2</div>
-            <p className="text-xs text-muted-foreground">
-              1 ready for pickup
-            </p>
+            {statsLoading ? (
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading...</span>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{stats?.reservations || 0}</div>
+                <p className="text-xs text-muted-foreground">
+                  {stats?.reservations ? 'Ready for pickup' : 'No reservations'}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -181,59 +283,107 @@ export default function PatronDashboard() {
             <Heart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-muted-foreground">
-              3 now available
-            </p>
+            {statsLoading ? (
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading...</span>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{stats?.wishlistItems || 0}</div>
+                <p className="text-xs text-muted-foreground">
+                  {stats?.wishlistItems ? 'Items saved' : 'No items saved'}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Outstanding Fines</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <AlertTriangle className={`h-4 w-4 ${(stats?.totalFines || 0) > 0 ? 'text-red-600' : 'text-muted-foreground'}`} />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$0.00</div>
-            <p className="text-xs text-muted-foreground">
-              All clear!
-            </p>
+            {statsLoading ? (
+              <div className="flex items-center space-x-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading...</span>
+              </div>
+            ) : (
+              <>
+                <div className={`text-2xl font-bold ${(stats?.totalFines || 0) > 0 ? 'text-red-600' : ''}`}>
+                  ${(stats?.totalFines || 0).toFixed(2)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {(stats?.totalFines || 0) === 0 ? 'All clear!' : 'Please pay promptly'}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Current Loans */}
+        {/* Current Loans - Real Data */}
         <Card>
-          <CardHeader>
-            <CardTitle>Current Loans</CardTitle>
-            <CardDescription>Books you currently have checked out</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Current Loans</CardTitle>
+              <CardDescription>Books you currently have checked out</CardDescription>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => fetchPatronData(true)}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                { title: "The Great Gatsby", dueDate: "2024-08-29", daysLeft: 7 },
-                { title: "1984", dueDate: "2024-08-25", daysLeft: 3 },
-                { title: "To Kill a Mockingbird", dueDate: "2024-09-05", daysLeft: 14 }
-              ].map((book, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <h4 className="font-medium">{book.title}</h4>
-                    <p className="text-sm text-muted-foreground">Due: {book.dueDate}</p>
+              {currentBooks.length > 0 ? currentBooks.map((transaction, index) => {
+                const daysLeft = getDaysLeft(transaction.dueDate);
+                const isOverdue = daysLeft < 0;
+                const isAlmostDue = daysLeft <= 3 && daysLeft >= 0;
+                
+                return (
+                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex-1">
+                      <h4 className="font-medium">{transaction.item.title}</h4>
+                      <p className="text-sm text-muted-foreground">by {transaction.item.author}</p>
+                      <p className="text-sm text-muted-foreground">Due: {formatDate(transaction.dueDate)}</p>
+                      {transaction.isOverdue && (
+                        <p className="text-sm text-red-600 font-medium">OVERDUE - Please return immediately</p>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge className={
+                        isOverdue ? "bg-red-100 text-red-800" :
+                        isAlmostDue ? "bg-orange-100 text-orange-800" : 
+                        "bg-blue-100 text-blue-800"
+                      }>
+                        {isOverdue ? `${Math.abs(daysLeft)} days overdue` : `${daysLeft} days left`}
+                      </Badge>
+                      <Button variant="outline" size="sm" disabled={isOverdue}>
+                        {isOverdue ? 'Return Required' : 'Renew'}
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge className={book.daysLeft < 5 ? "bg-orange-100 text-orange-800" : "bg-blue-100 text-blue-800"}>
-                      {book.daysLeft} days left
-                    </Badge>
-                    <Button variant="outline" size="sm">Renew</Button>
-                  </div>
+                );
+              }) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">No current loans</p>
+                  <p className="text-sm">Browse the catalog to start borrowing books.</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Reservations */}
+        {/* Reservations - Real Data */}
         <Card>
           <CardHeader>
             <CardTitle>Your Reservations</CardTitle>
@@ -241,28 +391,26 @@ export default function PatronDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                { title: "Dune", status: "Ready for Pickup", expiry: "2024-08-25" },
-                { title: "The Hobbit", status: "Processing", position: 2 }
-              ].map((item, index) => (
+              {reservations.length > 0 ? reservations.map((reservation, index) => (
                 <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
-                    <h4 className="font-medium">{item.title}</h4>
+                    <h4 className="font-medium">{reservation.item.title}</h4>
+                    <p className="text-sm text-muted-foreground">by {reservation.item.author}</p>
                     <p className="text-sm text-muted-foreground">
-                      {item.status === "Ready for Pickup" 
-                        ? `Expires: ${item.expiry}`
-                        : `Position ${item.position} in queue`
-                      }
+                      Reserved: {formatDate(reservation.reservedAt)}
                     </p>
                   </div>
-                  <Badge className={item.status === "Ready for Pickup" 
-                    ? "bg-green-100 text-green-800" 
-                    : "bg-yellow-100 text-yellow-800"
-                  }>
-                    {item.status}
+                  <Badge className="bg-blue-100 text-blue-800">
+                    Active
                   </Badge>
                 </div>
-              ))}
+              )) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">No active reservations</p>
+                  <p className="text-sm">Reserve books from the catalog when they become available.</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

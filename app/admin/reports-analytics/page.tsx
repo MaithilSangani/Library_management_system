@@ -128,63 +128,13 @@ export default function ReportsAnalytics() {
         </Card>
       </div>
 
-      <Tabs defaultValue="circulation" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="circulation">Circulation</TabsTrigger>
+      <Tabs defaultValue="collection" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="collection">Collection</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="financial">Financial</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="circulation" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Circulation Trends</CardTitle>
-                <CardDescription>Book borrowing and return patterns</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={mockData.circulation}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="borrowed" stroke="#8884d8" strokeWidth={2} />
-                    <Line type="monotone" dataKey="returned" stroke="#82ca9d" strokeWidth={2} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Most Popular Books</CardTitle>
-                <CardDescription>Top borrowed books this period</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {[
-                    { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', borrows: 45 },
-                    { title: '1984', author: 'George Orwell', borrows: 38 },
-                    { title: 'To Kill a Mockingbird', author: 'Harper Lee', borrows: 32 },
-                    { title: 'Pride and Prejudice', author: 'Jane Austen', borrows: 28 },
-                    { title: 'The Catcher in the Rye', author: 'J.D. Salinger', borrows: 24 }
-                  ].map((book, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <h4 className="font-medium">{book.title}</h4>
-                        <p className="text-sm text-muted-foreground">{book.author}</p>
-                      </div>
-                      <Badge variant="secondary">{book.borrows} borrows</Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
 
         <TabsContent value="collection" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
